@@ -2,6 +2,52 @@
 
 Generates a new "why are these words like this?" puzzle every day from word lists and English-language statistics. No hand-designed puzzles: a **pattern factory** that finds statistical outliers under constraints.
 
+---
+
+## Setup (for new devs)
+
+**1. Clone and enter the repo**
+```bash
+git clone https://github.com/kingbenjamin03/DailyLetterGame.git
+cd DailyLetterGame
+```
+
+**2. Create a virtualenv and install dependencies**
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**3. Build the feature table (required once before the app works)**
+```bash
+python -m daily_game.build_features
+```
+This downloads a word-frequency list and builds the puzzle feature table. It may take a minute.
+
+**4. Generate today’s puzzle (required once per day for the “today” game)**
+```bash
+python -m daily_game.daily
+```
+Writes `data/today.json`. The app will also auto-generate if the file is missing or stale.
+
+**5. Run the web app**
+```bash
+uvicorn daily_game.app:app --reload --host 127.0.0.1 --port 8000
+```
+Then open **http://localhost:8000** — click **Language** to play.
+
+**6. Optional: API key for smarter guess checking**  
+Without a key, the game uses keyword matching only. With an **OpenAI API key**, the app can accept semantically equivalent guesses (e.g. “vowels are spread unevenly” for “Words with highest vowel_spacing_std”).
+
+- Get a key: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- Copy `.env.example` to `.env` and set `OPENAI_API_KEY=sk-your-key`
+- Do **not** commit `.env` (it’s in `.gitignore`)
+
+See **AI guess matching (optional)** below for more detail.
+
+---
+
 ## Pipeline
 
 1. **Feature vectors** — Every word gets metrics: length, entropy, vowel ratio, letter repetition, bigram weirdness, etc.
