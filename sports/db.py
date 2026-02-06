@@ -41,16 +41,21 @@ def init_db(conn: duckdb.DuckDBPyConnection | None = None) -> None:
         )
     """)
 
-    # Players (league + name + optional ref slug for dedup)
+    # Players (league + name + optional ref slug for dedup; profile_path = exact path from site for links)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS players (
             id INTEGER PRIMARY KEY,
             league_id VARCHAR NOT NULL,
             name VARCHAR NOT NULL,
             ref_slug VARCHAR,
+            profile_path VARCHAR,
             FOREIGN KEY (league_id) REFERENCES leagues(id)
         )
     """)
+    try:
+        cur.execute("ALTER TABLE players ADD COLUMN profile_path VARCHAR")
+    except Exception:
+        pass  # column may already exist
     cur.execute("CREATE SEQUENCE IF NOT EXISTS players_seq START 1")
     # Ensure we have a way to get next id (DuckDB: use nextval in INSERT)
 
@@ -62,6 +67,19 @@ def init_db(conn: duckdb.DuckDBPyConnection | None = None) -> None:
             value_real DOUBLE,
             value_int BIGINT,
             PRIMARY KEY (player_id, stat_name),
+            FOREIGN KEY (player_id) REFERENCES players(id)
+        )
+    """)
+
+    # Season stat totals (one row per player per stat per year) — e.g. "most passing TD in 2010"
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS season_stats (
+            player_id INTEGER NOT NULL,
+            stat_name VARCHAR NOT NULL,
+            season_year INTEGER NOT NULL,
+            value_real DOUBLE,
+            value_int BIGINT,
+            PRIMARY KEY (player_id, stat_name, season_year),
             FOREIGN KEY (player_id) REFERENCES players(id)
         )
     """)

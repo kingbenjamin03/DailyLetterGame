@@ -6,3 +6,4 @@ data/
 *.npz
 .env
 sports/*.duckdb
+sports/*.duckdb.wal

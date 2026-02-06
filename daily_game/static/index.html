@@ -114,6 +114,14 @@
       margin-top: 0.25rem;
     }
     .category-card.available .sublabel { color: var(--accent); }
+    .category-card.sports.available {
+      color: #2563eb;
+    }
+    .category-card.sports.available .sublabel { color: #2563eb; }
+    .category-card.sports.available:hover {
+      border-color: #2563eb;
+      background: rgba(37, 99, 235, 0.1);
+    }
   </style>
 </head>
 <body>
@@ -125,10 +133,10 @@
         <span class="label">Language</span>
         <span class="sublabel">Play</span>
       </a>
-      <span class="category-card coming-soon">
+      <a href="/sports" class="category-card available sports">
         <span class="label">Sports</span>
-        <span class="sublabel">Coming soon</span>
-      </span>
+        <span class="sublabel">Play</span>
+      </a>
       <span class="category-card coming-soon">
         <span class="label">Media</span>
         <span class="sublabel">Coming soon</span>

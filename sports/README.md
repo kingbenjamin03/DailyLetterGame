@@ -15,10 +15,9 @@ If you get **403 Forbidden** from Sports Reference, the script will use **curl_c
 - **First run**: Fetches one page per leaderboard (~12 requests, ~1.2s apart). Takes about 1–2 minutes total.
 - **Later runs**: Skips leaderboards already in the DB. Use `--force` to refetch everything.
 
-## Known issue
+## Parser notes
 
-**NBA leaderboards** currently return 0 rows: Basketball-Reference’s career leaders pages use a different table/cell structure than the parser expects. NFL and NHL work. To fix later: inspect the live HTML for `pts_career.html` (or use browser dev tools) and update `_parse_br_leaders` in `sports/fetch.py` to match.
-
+**NBA/NHL**: Parsers updated for BBR/HR table layout. If data is incomplete: Basketball-Reference’s career leaders pages use a different table/cell structure than the parser expects. NFL and NHL work.
 ## Data source
 
 One request per leaderboard to Sports Reference:

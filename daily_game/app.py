@@ -26,12 +26,26 @@ from pydantic import BaseModel
 from .generator import ensure_today_puzzle, load_today, generate_random_puzzle, TODAY_JSON_PATH
 from .check import check_guess
 
+# Sports puzzle (optional: sports DB may be missing or empty)
+try:
+    from sports.game import get_today_puzzle as sports_get_today
+    from sports.game import get_random_puzzle as sports_get_random
+    from sports.game import check_sports_guess
+    from sports.game import get_player_info as sports_get_player_info
+    _SPORTS_AVAILABLE = True
+except Exception:
+    _SPORTS_AVAILABLE = False
+    sports_get_today = sports_get_random = check_sports_guess = sports_get_player_info = None  # type: ignore
+
 app = FastAPI(title="Patternfall")
 
 # In-memory cache for random puzzles: token -> { rule, metric_a, created_at }
 # Entries older than 30 minutes are dropped when we read.
 _RANDOM_PUZZLE_CACHE: dict[str, dict] = {}
 _RANDOM_CACHE_TTL_SEC = 30 * 60
+
+# Sports random puzzle cache: token -> { rule, league_id, stat_name, season_year?, created_at }
+_SPORTS_RANDOM_CACHE: dict[str, dict] = {}
 
 
 def _get_cached_random(token: str | None) -> dict | None:
@@ -154,6 +168,133 @@ def api_random_reveal(token: str = ""):
     return {"ok": True, "rule": cached["rule"]}
 
 
+def _get_cached_sports_random(token: str | None) -> dict | None:
+    if not token or not token.strip():
+        return None
+    now = time.time()
+    for k in list(_SPORTS_RANDOM_CACHE):
+        if now - _SPORTS_RANDOM_CACHE[k].get("created_at", 0) > _RANDOM_CACHE_TTL_SEC:
+            del _SPORTS_RANDOM_CACHE[k]
+    return _SPORTS_RANDOM_CACHE.get(token.strip())
+
+
+# --- Sports category ---
+
+@app.get("/api/sports/today")
+def api_sports_today(reveal_answer: bool = False):
+    """Return today's sports puzzle (player names + rule). Requires sports DB with data."""
+    if not _SPORTS_AVAILABLE or sports_get_today is None:
+        return {"ok": False, "error": "Sports category is not available."}
+    try:
+        data = sports_get_today()
+    except Exception as e:
+        return {"ok": False, "error": f"Could not load puzzle: {e}"}
+    if data is None:
+        return {"ok": False, "error": "No sports puzzle available. Run: pip install -r sports/requirements.txt then python -m sports.fetch to populate the database."}
+    out = {
+        "ok": True,
+        "date": time.strftime("%Y-%m-%d", time.gmtime()),
+        "words": data["words"],
+        "hints": data["hints"],
+        "difficulty": data.get("difficulty", "medium"),
+        "league_id": data.get("league_id", ""),
+    }
+    if data.get("season_year") is not None:
+        out["season_year"] = data["season_year"]
+    if reveal_answer:
+        out["rule"] = data["rule"]
+    return out
+
+
+@app.get("/api/sports/random")
+def api_sports_random(reveal_answer: bool = False):
+    """Return a random sports puzzle with a token for checking."""
+    if not _SPORTS_AVAILABLE or sports_get_random is None:
+        return {"ok": False, "error": "Sports category is not available."}
+    try:
+        data = sports_get_random()
+    except Exception as e:
+        return {"ok": False, "error": f"Could not load puzzle: {e}"}
+    if data is None:
+        return {"ok": False, "error": "No sports puzzle available. Run: pip install -r sports/requirements.txt then python -m sports.fetch to populate the database."}
+    token = secrets.token_urlsafe(16)
+    _SPORTS_RANDOM_CACHE[token] = {
+        "rule": data["rule"],
+        "league_id": data.get("league_id", ""),
+        "stat_name": data.get("stat_name", ""),
+        "season_year": data.get("season_year"),
+        "created_at": time.time(),
+    }
+    out = {
+        "ok": True,
+        "date": "Random",
+        "words": data["words"],
+        "hints": data["hints"],
+        "difficulty": data.get("difficulty", "medium"),
+        "token": token,
+        "league_id": data.get("league_id", ""),
+    }
+    if data.get("season_year") is not None:
+        out["season_year"] = data["season_year"]
+    if reveal_answer:
+        out["rule"] = data["rule"]
+    return out
+
+
+@app.get("/api/sports/random/reveal")
+def api_sports_random_reveal(token: str = ""):
+    """Reveal the rule for a random sports puzzle by token."""
+    cached = _get_cached_sports_random(token)
+    if not cached:
+        return {"ok": False, "error": "Invalid or expired puzzle."}
+    return {"ok": True, "rule": cached["rule"]}
+
+
+@app.get("/api/sports/player")
+def api_sports_player(name: str = "", league_id: str = ""):
+    """Return player profile URL and photo for a name (optional league_id from current puzzle)."""
+    if not _SPORTS_AVAILABLE or sports_get_player_info is None:
+        return {"ok": False, "error": "Sports category is not available."}
+    info = sports_get_player_info((name or "").strip(), (league_id or "").strip())
+    if not info:
+        return {"ok": False, "error": "Player not found."}
+    return {"ok": True, "name": info["name"], "profile_url": info.get("profile_url"), "photo_url": info.get("photo_url"), "league_id": info.get("league_id", "")}
+
+
+class SportsCheckRequest(BaseModel):
+    guess: str = ""
+    token: str = ""
+
+
+@app.post("/api/sports/check")
+def api_sports_check(body: SportsCheckRequest):
+    """Check guess for sports puzzle. Use token if this is a random puzzle."""
+    if not _SPORTS_AVAILABLE or check_sports_guess is None:
+        return {"ok": False, "error": "Sports category is not available."}
+    cached = _get_cached_sports_random(body.token)
+    if cached is not None:
+        rule = cached["rule"]
+        league_id = cached.get("league_id", "")
+        stat_name = cached.get("stat_name", "")
+        season_year = cached.get("season_year")
+    else:
+        try:
+            data = sports_get_today()
+        except Exception:
+            return {"ok": False, "error": "No puzzle available."}
+        if data is None:
+            return {"ok": False, "error": "No puzzle available."}
+        rule = data["rule"]
+        league_id = data.get("league_id", "")
+        stat_name = data.get("stat_name", "")
+        season_year = data.get("season_year")
+    correct, message = check_sports_guess(body.guess or "", rule, league_id, stat_name, season_year)
+    out = {"ok": True, "correct": correct, "message": message}
+    if correct:
+        out["rule"] = rule
+    return out
+
+
 class CheckRequest(BaseModel):
     guess: str = ""
     token: str = ""
@@ -217,6 +358,15 @@ def language():
     if html_path.exists():
         return FileResponse(html_path)
     return HTMLResponse("<p>Language game not found.</p>")
+
+
+@app.get("/sports", response_class=HTMLResponse)
+def sports():
+    """Serve the Sports daily pattern game."""
+    html_path = STATIC_DIR / "sports.html"
+    if html_path.exists():
+        return FileResponse(html_path)
+    return HTMLResponse("<p>Sports game not found.</p>")
 
 
 def _fallback_html() -> str:
