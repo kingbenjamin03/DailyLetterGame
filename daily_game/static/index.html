@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Patternfall</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f0ebe3;
+      --card: #ffffff;
+      --card-shadow: 0 8px 32px rgba(0,0,0,0.08);
+      --border: #e8e2da;
+      --text: #1f1d1b;
+      --muted: #7a756d;
+      --accent: #4a7c59;
+      --accent-hover: #3d6b4a;
+      --accent-bg: rgba(74, 124, 89, 0.1);
+      --coming: #b5b0a8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 22px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.5rem;
+    }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .card {
+      width: 100%;
+      max-width: 640px;
+      background: var(--card);
+      border-radius: 24px;
+      box-shadow: var(--card-shadow);
+      padding: 3rem 2.5rem;
+      text-align: center;
+      animation: cardIn 0.45s ease-out;
+    }
+    .logo {
+      font-size: 3.5rem;
+      font-weight: 700;
+      margin: 0 0 0.35rem 0;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+    .tagline {
+      font-size: 1.2rem;
+      color: var(--muted);
+      margin-bottom: 2.5rem;
+    }
+    .categories {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      text-align: center;
+    }
+    .category-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.75rem 1.25rem;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1.25rem;
+      transition: border-color 0.25s ease, background 0.25s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .category-card:hover {
+      border-color: var(--accent);
+      background: var(--accent-bg);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    }
+    .category-card:active {
+      transform: translateY(0) scale(0.98);
+    }
+    .category-card.available {
+      color: var(--accent);
+      border-color: var(--border);
+    }
+    .category-card.available:hover {
+      background: var(--accent-bg);
+      border-color: var(--accent);
+    }
+    .category-card.coming-soon {
+      opacity: 0.65;
+      font-weight: 500;
+      cursor: default;
+      pointer-events: none;
+      color: var(--coming);
+    }
+    .category-card .label { display: block; }
+    .category-card .sublabel {
+      font-size: 0.85rem;
+      font-weight: 400;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+    .category-card.available .sublabel { color: var(--accent); }
+    .refresh-row {
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+    .refresh-btn {
+      font-family: inherit;
+      font-size: 0.95rem;
+      padding: 0.6rem 1.25rem;
+      background: transparent;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 600;
+      transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+    .refresh-btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-bg);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 class="logo">Patternfall</h1>
+    <p class="tagline">Choose a topic, guess the pattern.</p>
+    <div class="categories">
+      <a href="/language" class="category-card available">
+        <span class="label">Language</span>
+        <span class="sublabel">Play</span>
+      </a>
+      <span class="category-card coming-soon">
+        <span class="label">Sports</span>
+        <span class="sublabel">Coming soon</span>
+      </span>
+      <span class="category-card coming-soon">
+        <span class="label">Media</span>
+        <span class="sublabel">Coming soon</span>
+      </span>
+      <span class="category-card coming-soon">
+        <span class="label">Countries</span>
+        <span class="sublabel">Coming soon</span>
+      </span>
+      <span class="category-card coming-soon">
+        <span class="label">Music</span>
+        <span class="sublabel">Coming soon</span>
+      </span>
+    </div>
+    <div class="refresh-row">
+      <button type="button" class="refresh-btn" onclick="window.location.reload()">Refresh page</button>
+    </div>
+  </div>
+</body>
+</html>
