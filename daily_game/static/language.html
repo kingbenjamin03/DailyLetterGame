@@ -652,20 +652,34 @@
         if (revealBtn && !revealBtn.disabled) {
           e.preventDefault();
           (async () => {
-            if (state.puzzleToken) {
-              const r = await fetch('/api/random/reveal?token=' + encodeURIComponent(state.puzzleToken));
-              const res = await r.json();
-              if (res.ok && res.rule) {
-                state.answerRevealed = true;
-                if (puzzleData) puzzleData.rule = res.rule;
-                render(puzzleData, state);
+            const btn = revealBtn;
+            btn.disabled = true;
+            btn.textContent = 'Revealing…';
+            try {
+              if (state.puzzleToken) {
+                const r = await fetch('/api/random/reveal?token=' + encodeURIComponent(state.puzzleToken));
+                const res = await r.json();
+                if (res.ok && res.rule) {
+                  state.answerRevealed = true;
+                  if (puzzleData) puzzleData.rule = res.rule;
+                  render(puzzleData, state);
+                } else {
+                  state.checkMessage = res.error || 'Could not reveal. Try a new puzzle.';
+                  render(puzzleData, state);
+                }
+              } else {
+                const full = await fetchToday(true);
+                if (full.ok && full.rule) {
+                  state.answerRevealed = true;
+                  render(full, state);
+                } else {
+                  state.checkMessage = full.error || 'Could not load answer.';
+                  render(puzzleData, state);
+                }
               }
-            } else {
-              const full = await fetchToday(true);
-              if (full.ok) {
-                state.answerRevealed = true;
-                render(full, state);
-              }
+            } catch (err) {
+              state.checkMessage = 'Reveal failed. Try again.';
+              render(puzzleData, state);
             }
           })();
         }

@@ -4,6 +4,7 @@ Daily pattern generator: load feature table, run templates, score, pick best, av
 from __future__ import annotations
 
 import json
+import random
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -196,19 +197,46 @@ def _puzzle_dict(pattern: CandidatePattern, pqs_score: float) -> dict:
     }
 
 
+def _get_scored_candidates(
+    table: np.ndarray,
+    feature_names: list[str],
+    *,
+    skip_recent: bool = False,
+    skip_overused: bool = False,
+) -> list[tuple[CandidatePattern, float]]:
+    """Return list of (pattern, score) that pass filters. For random we use skip_*=False so pool is large."""
+    candidates = run_all_templates(table, feature_names, max_per_template=40)
+    scored = filter_and_rank(candidates, table, min_pqs=MIN_PQS, min_words=4, max_words=10)
+    if not scored:
+        return []
+    used = load_used_patterns()
+    recent_sigs = _recent_signatures(used, NO_REUSE_DAYS) if skip_recent else set()
+    word_counts = _word_use_counts(used) if skip_overused else {}
+    out = []
+    for candidate, pqs_score in scored:
+        sig = _pattern_signature(candidate)
+        if sig in recent_sigs:
+            continue
+        if skip_overused:
+            overused = [w for w in candidate.words if word_counts.get(w, 0) >= MAX_WORD_REUSE_PER_MONTH]
+            if overused:
+                continue
+        out.append((candidate, pqs_score))
+    return out
+
+
 def generate_random_puzzle() -> dict | None:
     """
     Generate a one-off puzzle with a different topic (no save to today.json or used_patterns).
-    Uses relaxed filters so we get variety. Returns same shape as daily puzzle or None.
+    Randomly picks from the full pool of valid patterns so each "New puzzle" is different.
     """
     table, feature_names = load_feature_table()
-    # Allow recent metric combos and word reuse so we have more variety for "random"
-    result = select_best_pattern(
+    pool = _get_scored_candidates(
         table, feature_names,
-        skip_recent_metric_combos=False,
-        skip_overused_words=False,
+        skip_recent=False,
+        skip_overused=False,
     )
-    if result is None:
+    if not pool:
         return None
-    pattern, pqs_score = result
+    pattern, pqs_score = random.choice(pool)
     return _puzzle_dict(pattern, pqs_score)

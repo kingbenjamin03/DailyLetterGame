@@ -16,7 +16,7 @@ CORRECT_PHRASES: dict[str, list[str]] = {
     "vowel_ratio": ["vowel", "vowels", "consonants", "vowel ratio", "vowel proportion", "vowels and consonants"],
     "corpus_frequency": ["common", "rare", "frequency", "how often", "frequently", "corpus", "usage", "common words"],
     "vowel_spacing_std": ["vowel spacing", "vowels spaced", "spacing between vowels", "gaps between vowels", "vowel gaps", "where vowels", "vowels are spread", "uneven vowel", "even vowel", "distance between vowels"],
-    "alphabetic_order_score": ["alphabetical", "alphabet order", "letters in order", "a to z", "abc order", "alphabetical order"],
+    "alphabetic_order_score": ["alphabetical", "alphabet order", "letters in order", "a to z", "abc order", "alphabetical order", "alphabetical order score", "alphabetic order score", "letters in alphabetical order"],
     "bigram_probability": ["letter pairs", "two-letter", "bigram", "letter combinations", "pairs of letters", "two letter"],
     "edit_density": ["unusual letters", "rare letters", "letter combinations", "weird letters", "uncommon letters", "unusual combinations"],
     "consonant_runs": ["consonant", "consonants", "consonant cluster", "consonant run", "blocks of consonants", "consonant group"],
