@@ -32,6 +32,17 @@ SPORT_RULES: dict[tuple[str, str], tuple[str, list[str]]] = {
 DEFAULT_NUM_PLAYERS = 6
 MIN_PLAYERS = 4
 
+# TODO(data): Some scraped leaderboards have numeric "names" (e.g. rank stored as name).
+# Filtering them out here; fix parsers/fetch to avoid storing numbers as player names.
+
+
+def _is_valid_player_name(s: str) -> bool:
+    """False if the string is empty or purely numeric (so we never show numbers as puzzle words)."""
+    t = (s or "").strip()
+    if not t:
+        return False
+    return not t.replace(".", "").replace("-", "").isdigit()
+
 
 def _get_rule_and_accepted(league_id: str, stat_name: str, season_year: int | None) -> tuple[str, list[str]]:
     """Rule text and accepted guess phrases for (league_id, stat_name) and optional season_year."""
@@ -44,13 +55,15 @@ def _get_rule_and_accepted(league_id: str, stat_name: str, season_year: int | No
 
 
 def _available_leaderboards(conn) -> list[tuple[str, str, int | None]]:
-    """Return list of (league_id, stat_name, season_year) with at least MIN_PLAYERS rows. season_year None = career."""
+    """Return list of (league_id, stat_name, season_year) with at least MIN_PLAYERS valid-name rows."""
     cur = conn.cursor()
     out: list[tuple[str, str, int | None]] = []
+    # Exclude leaderboards where player "name" is purely numeric (bad data)
     cur.execute("""
         SELECT p.league_id, cs.stat_name
         FROM career_stats cs
         JOIN players p ON p.id = cs.player_id
+        WHERE NOT regexp_matches(TRIM(COALESCE(p.name, '')), '^[0-9.\\-]+$')
         GROUP BY p.league_id, cs.stat_name
         HAVING COUNT(*) >= ?
     """, (MIN_PLAYERS,))
@@ -60,6 +73,7 @@ def _available_leaderboards(conn) -> list[tuple[str, str, int | None]]:
         SELECT p.league_id, ss.stat_name, ss.season_year
         FROM season_stats ss
         JOIN players p ON p.id = ss.player_id
+        WHERE NOT regexp_matches(TRIM(COALESCE(p.name, '')), '^[0-9.\\-]+$')
         GROUP BY p.league_id, ss.stat_name, ss.season_year
         HAVING COUNT(*) >= ?
     """, (MIN_PLAYERS,))
@@ -69,8 +83,9 @@ def _available_leaderboards(conn) -> list[tuple[str, str, int | None]]:
 
 
 def _get_top_players(conn, league_id: str, stat_name: str, season_year: int | None = None, n: int = DEFAULT_NUM_PLAYERS) -> list[str]:
-    """Return top N player names; season_year None = career_stats, else season_stats."""
+    """Return top N player names (excluding purely numeric names). Fetches extra rows to skip bad data."""
     cur = conn.cursor()
+    limit = max(n * 3, 50)  # fetch extra so we can filter out numeric "names"
     if season_year is None:
         cur.execute("""
             SELECT p.name
@@ -79,7 +94,7 @@ def _get_top_players(conn, league_id: str, stat_name: str, season_year: int | No
             WHERE p.league_id = ? AND cs.stat_name = ?
             ORDER BY COALESCE(cs.value_real, cs.value_int, 0) DESC
             LIMIT ?
-        """, (league_id, stat_name, n))
+        """, (league_id, stat_name, limit))
     else:
         cur.execute("""
             SELECT p.name
@@ -88,14 +103,16 @@ def _get_top_players(conn, league_id: str, stat_name: str, season_year: int | No
             WHERE p.league_id = ? AND ss.stat_name = ? AND ss.season_year = ?
             ORDER BY COALESCE(ss.value_real, ss.value_int, 0) DESC
             LIMIT ?
-        """, (league_id, stat_name, season_year, n))
+        """, (league_id, stat_name, season_year, limit))
     names: list[str] = []
     for row in cur.fetchall():
         val = row[0] if row else None
         if val is not None:
             s = str(val).strip()
-            if s:
+            if s and _is_valid_player_name(s):
                 names.append(s)
+                if len(names) >= n:
+                    break
     return names[:n]
 
 
