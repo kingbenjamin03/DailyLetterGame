@@ -7,5 +7,7 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.6"
+      - key: WORD_LIST
+        value: "data/words.txt"
       - key: OPENAI_API_KEY
         sync: false
