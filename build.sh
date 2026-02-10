@@ -2,12 +2,14 @@
 # Render build script: install deps and pre-build feature table + initial puzzle
 set -o errexit
 
-# Install system word list (not present on Render's Linux image)
-if [ ! -f /usr/share/dict/words ]; then
-    mkdir -p /usr/share/dict
+# Download word list into data/ (Render has no /usr/share/dict/words
+# and no write access to /usr/share)
+mkdir -p data
+if [ ! -f data/words.txt ]; then
     curl -fsSL "https://raw.githubusercontent.com/eneko/data-repository/master/data/words.txt" \
-        -o /usr/share/dict/words
+        -o data/words.txt
 fi
+export WORD_LIST="data/words.txt"
 
 pip install --upgrade pip
 pip install -r requirements.txt
