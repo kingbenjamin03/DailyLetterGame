@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: patternfall
+    runtime: python
+    buildCommand: bash build.sh
+    startCommand: uvicorn daily_game.app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.6"
+      - key: OPENAI_API_KEY
+        sync: false
