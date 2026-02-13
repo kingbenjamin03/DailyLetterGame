@@ -37,6 +37,16 @@ except Exception:
     _SPORTS_AVAILABLE = False
     sports_get_today = sports_get_random = check_sports_guess = sports_get_player_info = None  # type: ignore
 
+# Trivia puzzle (optional: Wikipedia API based)
+try:
+    from trivia.game import get_today_puzzle as trivia_get_today
+    from trivia.game import get_random_puzzle as trivia_get_random
+    from trivia.game import check_trivia_guess
+    _TRIVIA_AVAILABLE = True
+except Exception:
+    _TRIVIA_AVAILABLE = False
+    trivia_get_today = trivia_get_random = check_trivia_guess = None  # type: ignore
+
 app = FastAPI(title="Patternfall")
 
 # In-memory cache for random puzzles: token -> { rule, metric_a, created_at }
@@ -46,6 +56,9 @@ _RANDOM_CACHE_TTL_SEC = 30 * 60
 
 # Sports random puzzle cache: token -> { rule, league_id, stat_name, season_year?, created_at }
 _SPORTS_RANDOM_CACHE: dict[str, dict] = {}
+
+# Trivia random puzzle cache: token -> { rule, category_key, created_at }
+_TRIVIA_RANDOM_CACHE: dict[str, dict] = {}
 
 
 def _get_cached_random(token: str | None) -> dict | None:
@@ -295,6 +308,110 @@ def api_sports_check(body: SportsCheckRequest):
     return out
 
 
+# --- Trivia category ---
+
+def _get_cached_trivia_random(token: str | None) -> dict | None:
+    if not token or not token.strip():
+        return None
+    now = time.time()
+    for k in list(_TRIVIA_RANDOM_CACHE):
+        if now - _TRIVIA_RANDOM_CACHE[k].get("created_at", 0) > _RANDOM_CACHE_TTL_SEC:
+            del _TRIVIA_RANDOM_CACHE[k]
+    return _TRIVIA_RANDOM_CACHE.get(token.strip())
+
+
+@app.get("/api/trivia/today")
+def api_trivia_today(reveal_answer: bool = False):
+    """Return today's trivia puzzle (items from a Wikipedia category)."""
+    if not _TRIVIA_AVAILABLE or trivia_get_today is None:
+        return {"ok": False, "error": "Trivia category is not available."}
+    try:
+        data = trivia_get_today()
+    except Exception as e:
+        return {"ok": False, "error": f"Could not load puzzle: {e}"}
+    if data is None:
+        return {"ok": False, "error": "No trivia puzzle available."}
+    out = {
+        "ok": True,
+        "date": time.strftime("%Y-%m-%d", time.gmtime()),
+        "words": data["words"],
+        "hints": data["hints"],
+        "difficulty": data.get("difficulty", "medium"),
+    }
+    if reveal_answer:
+        out["rule"] = data["rule"]
+    return out
+
+
+@app.get("/api/trivia/random")
+def api_trivia_random(reveal_answer: bool = False):
+    """Return a random trivia puzzle with a token for checking."""
+    if not _TRIVIA_AVAILABLE or trivia_get_random is None:
+        return {"ok": False, "error": "Trivia category is not available."}
+    try:
+        data = trivia_get_random()
+    except Exception as e:
+        return {"ok": False, "error": f"Could not load puzzle: {e}"}
+    if data is None:
+        return {"ok": False, "error": "No trivia puzzle available."}
+    token = secrets.token_urlsafe(16)
+    _TRIVIA_RANDOM_CACHE[token] = {
+        "rule": data["rule"],
+        "category_key": data.get("category_key", ""),
+        "created_at": time.time(),
+    }
+    out = {
+        "ok": True,
+        "date": "Random",
+        "words": data["words"],
+        "hints": data["hints"],
+        "difficulty": data.get("difficulty", "medium"),
+        "token": token,
+    }
+    if reveal_answer:
+        out["rule"] = data["rule"]
+    return out
+
+
+@app.get("/api/trivia/random/reveal")
+def api_trivia_random_reveal(token: str = ""):
+    """Reveal the rule for a random trivia puzzle by token."""
+    cached = _get_cached_trivia_random(token)
+    if not cached:
+        return {"ok": False, "error": "Invalid or expired puzzle."}
+    return {"ok": True, "rule": cached["rule"]}
+
+
+class TriviaCheckRequest(BaseModel):
+    guess: str = ""
+    token: str = ""
+
+
+@app.post("/api/trivia/check")
+def api_trivia_check(body: TriviaCheckRequest):
+    """Check guess for trivia puzzle. Use token if this is a random puzzle."""
+    if not _TRIVIA_AVAILABLE or check_trivia_guess is None:
+        return {"ok": False, "error": "Trivia category is not available."}
+    cached = _get_cached_trivia_random(body.token)
+    if cached is not None:
+        rule = cached["rule"]
+        category_key = cached.get("category_key", "")
+    else:
+        try:
+            data = trivia_get_today()
+        except Exception:
+            return {"ok": False, "error": "No puzzle available."}
+        if data is None:
+            return {"ok": False, "error": "No puzzle available."}
+        rule = data["rule"]
+        category_key = data.get("category_key", "")
+    correct, message = check_trivia_guess(body.guess or "", rule, category_key)
+    out = {"ok": True, "correct": correct, "message": message}
+    if correct:
+        out["rule"] = rule
+    return out
+
+
 class CheckRequest(BaseModel):
     guess: str = ""
     token: str = ""
@@ -367,6 +484,15 @@ def sports():
     if html_path.exists():
         return FileResponse(html_path)
     return HTMLResponse("<p>Sports game not found.</p>")
+
+
+@app.get("/trivia", response_class=HTMLResponse)
+def trivia():
+    """Serve the Trivia daily pattern game."""
+    html_path = STATIC_DIR / "trivia.html"
+    if html_path.exists():
+        return FileResponse(html_path)
+    return HTMLResponse("<p>Trivia game not found.</p>")
 
 
 def _fallback_html() -> str:
