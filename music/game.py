@@ -49,7 +49,7 @@ def _hints_for(puzzle_type: str) -> list[str]:
         return [
             "These songs all appear on the same album.",
             "They're tracks from one iconic record.",
-            "Guess the album.",
+            "Guess the album or the artist.",
         ]
     if puzzle_type == "genre":
         return [
@@ -181,7 +181,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_thriller",
         "Thriller",
-        _accept("thriller"),
+        _accept("thriller", "michael jackson", "jackson", "mj"),
         "easy",
         _hints_for("album"),
         "album",
@@ -190,7 +190,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_abbey_road",
         "Abbey Road",
-        _accept("abbey road"),
+        _accept("abbey road", "the beatles", "beatles"),
         "medium",
         _hints_for("album"),
         "album",
@@ -199,7 +199,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_dark_side_of_the_moon",
         "The Dark Side of the Moon",
-        _accept("the dark side of the moon", "dark side of the moon", "dark side"),
+        _accept("the dark side of the moon", "dark side of the moon", "dark side", "pink floyd", "floyd"),
         "medium",
         _hints_for("album"),
         "album",
@@ -208,7 +208,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_rumours",
         "Rumours",
-        _accept("rumours", "rumors"),
+        _accept("rumours", "rumors", "fleetwood mac", "mac"),
         "medium",
         _hints_for("album"),
         "album",
@@ -217,7 +217,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_nevermind",
         "Nevermind",
-        _accept("nevermind", "nirvana nevermind"),
+        _accept("nevermind", "nirvana nevermind", "nirvana"),
         "medium",
         _hints_for("album"),
         "album",
@@ -226,7 +226,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_back_in_black",
         "Back in Black",
-        _accept("back in black", "ac dc back in black"),
+        _accept("back in black", "ac dc back in black", "ac/dc", "ac dc", "acdc"),
         "medium",
         _hints_for("album"),
         "album",
@@ -235,7 +235,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_purple_rain",
         "Purple Rain",
-        _accept("purple rain"),
+        _accept("purple rain", "prince"),
         "medium",
         _hints_for("album"),
         "album",
@@ -244,7 +244,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_lemonade",
         "Lemonade",
-        _accept("lemonade", "beyonce lemonade"),
+        _accept("lemonade", "beyonce lemonade", "beyonce", "beyoncé"),
         "medium",
         _hints_for("album"),
         "album",
@@ -253,7 +253,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_1989",
         "1989",
-        _accept("1989", "taylor swift 1989"),
+        _accept("1989", "taylor swift 1989", "taylor swift", "swift"),
         "easy",
         _hints_for("album"),
         "album",
@@ -262,7 +262,7 @@ CATEGORIES: list[MusicCategory] = [
     MusicCategory(
         "album_to_pimp_a_butterfly",
         "To Pimp a Butterfly",
-        _accept("to pimp a butterfly", "tpab"),
+        _accept("to pimp a butterfly", "tpab", "kendrick lamar", "kendrick"),
         "hard",
         _hints_for("album"),
         "album",
