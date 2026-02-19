@@ -369,6 +369,16 @@
       color: var(--muted);
       animation: loadingPulse 1.2s ease-in-out infinite;
     }
+    .already-done-banner {
+      background: var(--hint-bg);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 10px;
+      padding: 0.65rem 1rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+    }
   </style>
 </head>
 <body>
@@ -394,6 +404,31 @@
     const root = document.getElementById('root');
     let puzzleData = null;
     const state = { hintsRevealed: 0, answerRevealed: false, guessCorrect: false, checkMessage: '', correctRule: '', puzzleToken: '' };
+
+    const STORAGE_KEY = 'patternfall_language_completion';
+
+    function saveCompletion() {
+      if (state.puzzleToken) return;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          date: puzzleData && puzzleData.date,
+          guessCorrect: state.guessCorrect,
+          correctRule: state.correctRule,
+          hintsRevealed: state.hintsRevealed,
+          answerRevealed: state.answerRevealed,
+        }));
+      } catch (_) {}
+    }
+
+    function loadCompletion(todayDate) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const saved = JSON.parse(raw);
+        if (saved.date !== todayDate) return null;
+        return saved;
+      } catch (_) { return null; }
+    }
 
     async function fetchToday(revealAnswer = false) {
       state.puzzleToken = '';
@@ -500,6 +535,7 @@
               const full = await fetchToday(true);
               if (full.ok && full.rule) state.correctRule = full.rule;
             }
+            saveCompletion();
           }
           render(puzzleData, state);
         } else {
@@ -662,6 +698,7 @@
                 if (res.ok && res.rule) {
                   state.answerRevealed = true;
                   if (puzzleData) puzzleData.rule = res.rule;
+                  saveCompletion();
                   render(puzzleData, state);
                 } else {
                   state.checkMessage = res.error || 'Could not reveal. Try a new puzzle.';
@@ -671,6 +708,7 @@
                 const full = await fetchToday(true);
                 if (full.ok && full.rule) {
                   state.answerRevealed = true;
+                  saveCompletion();
                   render(full, state);
                 } else {
                   state.checkMessage = full.error || 'Could not load answer.';
@@ -702,7 +740,25 @@
 
     (async () => {
       const data = await fetchToday();
-      render(data);
+      if (data && data.ok) {
+        const saved = loadCompletion(data.date);
+        if (saved) {
+          state.guessCorrect = saved.guessCorrect || false;
+          state.correctRule = saved.correctRule || '';
+          state.hintsRevealed = saved.hintsRevealed || 0;
+          state.answerRevealed = saved.answerRevealed || false;
+          if (state.answerRevealed && saved.correctRule) data.rule = saved.correctRule;
+          render(data);
+          const banner = document.createElement('div');
+          banner.className = 'already-done-banner';
+          banner.textContent = state.guessCorrect ? '✓ You already solved this one today.' : 'You already played today\'s puzzle.';
+          document.querySelector('.page').prepend(banner);
+        } else {
+          render(data);
+        }
+      } else {
+        render(data);
+      }
     })();
   </script>
 </body>
