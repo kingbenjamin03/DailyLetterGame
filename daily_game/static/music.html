@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Music · Patternfall</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f0ebe3;
+      --card: #ffffff;
+      --card-shadow: 0 8px 32px rgba(0,0,0,0.08);
+      --border: #e8e2da;
+      --text: #1f1d1b;
+      --muted: #7a756d;
+      --accent: #d97706; /* Amber/Gold */
+      --accent-hover: #b45309;
+      --accent-bg: rgba(217, 119, 6, 0.1);
+      --hint-bg: #f8f6f2;
+      --danger: #c44a3a;
+      --danger-bg: rgba(196, 74, 58, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 22px;
+      line-height: 1.5;
+      padding: 2rem 1.5rem;
+    }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes feedbackIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes correctPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.85; }
+    }
+    .page {
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+      animation: fadeSlideIn 0.4s ease-out;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+    }
+    .nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 1.05rem;
+      transition: color 0.2s ease;
+    }
+    .nav a:hover { color: var(--accent); }
+    .game-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .meta {
+      font-size: 1rem;
+      color: var(--muted);
+    }
+    .header .meta { margin-bottom: 0; }
+    .page > p.meta {
+      margin-bottom: 1.25rem;
+      font-size: 1.1rem;
+    }
+    .words {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem;
+      margin-bottom: 3rem;
+    }
+    .word {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      font-size: 1.35rem;
+      padding: 0.85rem 1.35rem;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+      animation: fadeSlideIn 0.35s ease-out backwards;
+    }
+    .word:hover {
+      border-color: var(--accent);
+      background: var(--accent-bg);
+    }
+    .word:nth-child(1) { animation-delay: 0.02s; }
+    .word:nth-child(2) { animation-delay: 0.05s; }
+    .word:nth-child(3) { animation-delay: 0.08s; }
+    .word:nth-child(4) { animation-delay: 0.11s; }
+    .word:nth-child(5) { animation-delay: 0.14s; }
+    .word:nth-child(6) { animation-delay: 0.17s; }
+    .word:nth-child(7) { animation-delay: 0.2s; }
+    .word:nth-child(8) { animation-delay: 0.23s; }
+    .word:nth-child(n+9) { animation-delay: 0.26s; }
+    /* Wikipedia link popup */
+    .wiki-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+    }
+    .wiki-backdrop.hidden { display: none; }
+    .wiki-overlay {
+      position: fixed;
+      inset: 0;
+      cursor: default;
+    }
+    .wiki-backdrop .wiki-modal {
+      pointer-events: auto;
+      position: fixed;
+      max-width: 280px;
+      padding: 1.25rem 1.5rem;
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.15);
+      animation: fadeSlideIn 0.2s ease-out;
+    }
+    .wiki-modal .wiki-close {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1.35rem;
+      line-height: 1;
+      padding: 0.2rem;
+      transition: color 0.2s;
+    }
+    .wiki-modal .wiki-close:hover { color: var(--text); }
+    .wiki-modal .wiki-body { padding-right: 1.75rem; }
+    .wiki-modal .wiki-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    .wiki-modal .wiki-link {
+      display: inline-block;
+      font-size: 0.9rem;
+      color: var(--accent);
+      text-decoration: none;
+      margin-top: 0.25rem;
+    }
+    .wiki-modal .wiki-link:hover { text-decoration: underline; }
+    .section-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.85rem;
+    }
+    .guess-section { margin-bottom: 2.5rem; }
+    .guess-section .section-title { margin-bottom: 0.5rem; }
+    .hint-panel {
+      background: var(--hint-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem 1.75rem;
+      margin-bottom: 3rem;
+    }
+    .hint-panel .section-title { margin-bottom: 1rem; }
+    .hints {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .hint-row {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+    .hint-btn {
+      flex-shrink: 0;
+      font-family: inherit;
+      font-size: 0.95rem;
+      padding: 0.6rem 1rem;
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 600;
+      transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+    }
+    .hint-btn:hover:not(:disabled) {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-bg);
+      transform: translateY(-1px);
+    }
+    .hint-btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+    .hint-btn:disabled { cursor: default; opacity: 0.5; transition: opacity 0.25s ease; }
+    .hint-text {
+      flex: 1;
+      font-size: 0.95rem;
+      color: var(--muted);
+      font-style: italic;
+      transition: color 0.3s ease;
+    }
+    .hint-text.revealed {
+      color: var(--text);
+      font-style: normal;
+      animation: fadeSlideIn 0.35s ease-out;
+    }
+    .guess-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+      max-width: 640px;
+      align-items: center;
+    }
+    .guess-input {
+      flex: 1;
+      min-width: 0;
+      font-family: inherit;
+      font-size: 1.15rem;
+      padding: 0.75rem 1.15rem;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.2s ease;
+    }
+    .guess-input::placeholder { color: var(--muted); }
+    .guess-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: var(--card);
+      box-shadow: 0 0 0 4px var(--accent-bg);
+    }
+    .check-btn {
+      font-family: inherit;
+      font-size: 1.05rem;
+      padding: 0.75rem 1.35rem;
+      background: var(--accent);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      transition: filter 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
+    }
+    .check-btn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+    .check-btn:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+    .check-btn:disabled { opacity: 0.6; cursor: default; }
+    .check-btn.checking {
+      opacity: 0.85;
+      pointer-events: none;
+      transform: scale(0.98);
+    }
+    .guess-feedback {
+      font-size: 0.9rem;
+      margin-top: 0.4rem;
+      min-height: 1.3em;
+      transition: opacity 0.2s ease, color 0.2s ease;
+    }
+    .guess-feedback.correct {
+      color: var(--accent);
+      font-weight: 600;
+      animation: feedbackIn 0.3s ease-out, correctPulse 0.6s ease-in-out 0.3s;
+    }
+    .guess-feedback.wrong { color: var(--danger); animation: feedbackIn 0.3s ease-out; }
+    .guess-section .rule { margin-top: 1rem; }
+    .reveal-btn {
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.6rem 1rem;
+      background: transparent;
+      border: 2px solid var(--danger);
+      border-radius: 10px;
+      color: var(--danger);
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
+    }
+    .reveal-btn:hover:not(:disabled) { background: var(--danger-bg); transform: translateY(-1px); }
+    .reveal-btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+    .reveal-btn:disabled { opacity: 0.5; cursor: default; }
+    .rule {
+      font-size: 1.1rem;
+      color: var(--text);
+      padding: 1.35rem 1.35rem;
+      background: var(--hint-bg);
+      border-radius: 16px;
+      border-left: 4px solid var(--accent);
+      margin-top: 1.25rem;
+      animation: fadeSlideIn 0.4s ease-out;
+    }
+    .refresh-row {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    .refresh-btn {
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 0.65rem 1.35rem;
+      background: transparent;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 600;
+      transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+    .refresh-btn:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-bg);
+    }
+    .error { color: var(--danger); margin-top: 1rem; animation: feedbackIn 0.3s ease-out; }
+    @keyframes loadingPulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    .loading {
+      color: var(--muted);
+      animation: loadingPulse 1.2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <nav class="nav"><a href="/">← Home</a></nav>
+      <span class="game-title">Music</span>
+      <span id="game-meta" class="meta"></span>
+    </div>
+    <p class="meta">What do these songs or artists have in common? Guess the artist, album, genre, or decade.</p>
+    <div id="root" class="loading">Loading today's puzzle…</div>
+    <div id="wiki-backdrop" class="wiki-backdrop hidden" aria-live="polite">
+      <div id="wiki-overlay" class="wiki-overlay" aria-hidden="true"></div>
+      <div id="wiki-modal" class="wiki-modal" onclick="event.stopPropagation()">
+        <div id="wiki-content"></div>
+      </div>
+    </div>
+    <div class="refresh-row" id="refresh-row" style="display: none;">
+      <button type="button" class="refresh-btn" id="refresh-game-btn">New puzzle</button>
+    </div>
+  </div>
+  <script>
+    const root = document.getElementById('root');
+    let puzzleData = null;
+    const state = { hintsRevealed: 0, answerRevealed: false, guessCorrect: false, checkMessage: '', correctRule: '', puzzleToken: '' };
+
+    async function fetchToday(revealAnswer = false) {
+      state.puzzleToken = '';
+      const q = revealAnswer ? '?reveal_answer=true' : '';
+      const r = await fetch('/api/music/today' + q);
+      return r.json();
+    }
+
+    async function fetchRandom(revealAnswer = false) {
+      const q = revealAnswer ? '?reveal_answer=true' : '';
+      const r = await fetch('/api/music/random' + q);
+      return r.json();
+    }
+
+    function render(data, useState = state) {
+      if (!data || !data.ok) {
+        root.innerHTML = `<p class="error">${escapeHtml(data && data.error ? data.error : 'Failed to load puzzle.')}</p>`;
+        root.classList.remove('loading');
+        const refreshRow = document.getElementById('refresh-row');
+        if (refreshRow) refreshRow.style.display = 'block';
+        return;
+      }
+      puzzleData = data;
+      root.classList.remove('loading');
+      const { date, words, hints, difficulty, rule } = data;
+      const hintsRevealed = useState.hintsRevealed ?? 0;
+      const answerRevealed = useState.answerRevealed ?? false;
+
+      const metaEl = document.getElementById('game-meta');
+      if (metaEl) metaEl.textContent = `${date} · ${difficulty}`;
+      let html = `
+        <div class="words">
+          ${words.map(w => `<span class="word" data-item="${escapeHtml(w).replace(/"/g, '&quot;')}" title="Click for Wikipedia link">${escapeHtml(w)}</span>`).join('')}
+        </div>
+        <div class="section-title">Your guess</div>
+        <div class="guess-section">
+          <div class="guess-row">
+            <input type="text" class="guess-input" placeholder="${state.guessCorrect ? '' : 'e.g. Taylor Swift'}" data-guess-input ${answerRevealed || state.guessCorrect ? 'disabled' : ''}>
+            <button type="button" class="check-btn" data-check ${answerRevealed || state.guessCorrect ? 'disabled' : ''}>Check</button>
+            <button type="button" class="reveal-btn" ${answerRevealed ? 'disabled' : ''} data-reveal>
+              ${answerRevealed ? 'Answer revealed' : 'Reveal answer'}
+            </button>
+          </div>
+          <div class="guess-feedback ${state.guessCorrect ? 'correct' : state.checkMessage ? 'wrong' : ''}" data-feedback>${state.guessCorrect ? '✓ ' + escapeHtml(state.checkMessage) : escapeHtml(state.checkMessage)}</div>
+          ${answerRevealed && rule ? `<div class="rule">${escapeHtml(rule)}</div>` : ''}
+        </div>
+        <div class="hint-panel">
+          <div class="section-title">Need a hint?</div>
+          <div class="hints">
+      `;
+      for (let i = 0; i < 3; i++) {
+        const revealed = i < hintsRevealed;
+        html += `
+            <div class="hint-row">
+              <button type="button" class="hint-btn" data-hint="${i}" ${i < hintsRevealed ? 'disabled' : ''}>
+                Hint ${i + 1}
+              </button>
+              <span class="hint-text ${revealed ? 'revealed' : ''}">${revealed ? escapeHtml(hints[i]) : '—'}</span>
+            </div>
+        `;
+      }
+      html += `
+          </div>
+        </div>
+      `;
+      root.innerHTML = html;
+      const input = root.querySelector('.guess-input[data-guess-input]');
+      if (input && state.guessCorrect && state.correctRule) {
+        input.value = state.correctRule;
+        input.placeholder = '';
+      }
+      const refreshRow = document.getElementById('refresh-row');
+      if (refreshRow) refreshRow.style.display = 'block';
+      if (!window._musicListenersAttached) {
+        window._musicListenersAttached = true;
+        attachDelegatedListeners();
+      }
+    }
+
+    async function doCheck() {
+      const input = document.querySelector('#root .guess-input[data-guess-input]');
+      const btn = document.querySelector('#root .check-btn[data-check]');
+      const feedback = document.querySelector('#root .guess-feedback[data-feedback]');
+      const guess = input && input.value ? input.value.trim() : '';
+      if (!guess) {
+        if (feedback) feedback.textContent = 'Type your guess first.';
+        return;
+      }
+      if (btn) { btn.classList.add('checking'); btn.textContent = 'Checking…'; }
+      if (feedback) feedback.textContent = '';
+      try {
+        const r = await fetch('/api/music/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guess, token: state.puzzleToken || '' }) });
+        const res = await r.json();
+        if (res.ok) {
+          state.guessCorrect = res.correct;
+          state.checkMessage = res.message || (res.correct ? 'Correct!' : 'Not quite.');
+          if (res.correct) {
+            state.correctRule = res.rule || '';
+            if (!state.correctRule && state.puzzleToken) {
+              const rev = await fetch('/api/music/random/reveal?token=' + encodeURIComponent(state.puzzleToken));
+              const revRes = await rev.json();
+              if (revRes.ok && revRes.rule) state.correctRule = revRes.rule;
+            } else if (!state.correctRule) {
+              const full = await fetchToday(true);
+              if (full.ok && full.rule) state.correctRule = full.rule;
+            }
+          }
+          render(puzzleData, state);
+        } else {
+          state.checkMessage = res.error || 'Something went wrong.';
+          render(puzzleData, state);
+        }
+      } catch (err) {
+        if (feedback) feedback.textContent = 'Network error. Try again.';
+        if (btn) { btn.classList.remove('checking'); btn.textContent = 'Check'; }
+      }
+    }
+
+    function closeWikiPopup() {
+      const backdrop = document.getElementById('wiki-backdrop');
+      if (backdrop) {
+        backdrop.classList.add('hidden');
+        backdrop.removeAttribute('data-current');
+      }
+    }
+
+    function showWikiLink(item, anchorEl) {
+      const backdrop = document.getElementById('wiki-backdrop');
+      const content = document.getElementById('wiki-content');
+      const modal = document.getElementById('wiki-modal');
+      const overlay = document.getElementById('wiki-overlay');
+      if (!backdrop || !content || !modal) return;
+
+      const sameItem = backdrop.getAttribute('data-current') === item;
+      if (sameItem) { closeWikiPopup(); return; }
+
+      backdrop.setAttribute('data-current', item);
+      if (overlay) overlay.onclick = closeWikiPopup;
+      document.addEventListener('keydown', function _esc(e) {
+        if (e.key === 'Escape') { closeWikiPopup(); document.removeEventListener('keydown', _esc); }
+      });
+
+      const wikiUrl = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.replace(/ /g, '_'));
+      content.innerHTML = '<button type="button" class="wiki-close" aria-label="Close">×</button>' +
+        '<div class="wiki-body">' +
+          '<div class="wiki-title">' + escapeHtml(item) + '</div>' +
+          '<a class="wiki-link" href="' + escapeHtml(wikiUrl) + '" target="_blank" rel="noopener">Read on Wikipedia →</a>' +
+        '</div>';
+      content.querySelector('.wiki-close').addEventListener('click', closeWikiPopup);
+
+      if (anchorEl) {
+        const rect = anchorEl.getBoundingClientRect();
+        const maxW = 280;
+        let top = rect.bottom + 8;
+        if (top + 100 > window.innerHeight) top = rect.top - 100;
+        let left = rect.left + rect.width / 2 - maxW / 2;
+        if (left < 12) left = 12;
+        if (left + maxW > window.innerWidth - 12) left = window.innerWidth - maxW - 12;
+        modal.style.width = maxW + 'px';
+        modal.style.left = left + 'px';
+        modal.style.top = top + 'px';
+        modal.style.transform = 'none';
+      } else {
+        modal.style.left = '50%';
+        modal.style.top = '50%';
+        modal.style.transform = 'translate(-50%, -50%)';
+        modal.style.width = '280px';
+      }
+      backdrop.classList.remove('hidden');
+    }
+
+    async function refreshGame() {
+      state.hintsRevealed = 0;
+      state.answerRevealed = false;
+      state.guessCorrect = false;
+      state.checkMessage = '';
+      state.correctRule = '';
+      root.classList.add('loading');
+      root.innerHTML = 'Loading new puzzle…';
+      try {
+        const data = await fetchRandom();
+        if (data && data.ok) {
+          state.puzzleToken = data.token || '';
+          render(data);
+        } else {
+          root.classList.remove('loading');
+          root.innerHTML = '<p class="error">' + (data && data.error ? escapeHtml(data.error) : 'Failed to load new puzzle.') + '</p>';
+        }
+      } catch (err) {
+        root.classList.remove('loading');
+        root.innerHTML = '<p class="error">Network error. Try again.</p>';
+      }
+    }
+
+    function attachDelegatedListeners() {
+      const rootEl = document.getElementById('root');
+      if (!rootEl) return;
+      const refreshBtn = document.getElementById('refresh-game-btn');
+      if (refreshBtn) refreshBtn.onclick = refreshGame;
+      rootEl.addEventListener('click', function handleRootClick(e) {
+        const wordEl = e.target.closest('.word[data-item]');
+        if (wordEl) {
+          e.preventDefault();
+          showWikiLink(wordEl.getAttribute('data-item'), wordEl);
+          return;
+        }
+        const checkBtn = e.target.closest('.check-btn[data-check]');
+        const hintBtn = e.target.closest('.hint-btn[data-hint]');
+        const revealBtn = e.target.closest('.reveal-btn[data-reveal]');
+        if (checkBtn && !checkBtn.disabled) {
+          e.preventDefault();
+          doCheck();
+          return;
+        }
+        if (hintBtn && !hintBtn.disabled) {
+          e.preventDefault();
+          const n = parseInt(hintBtn.getAttribute('data-hint'), 10);
+          state.hintsRevealed = Math.max(state.hintsRevealed, n + 1);
+          render(puzzleData, state);
+          return;
+        }
+        if (revealBtn && !revealBtn.disabled) {
+          e.preventDefault();
+          (async () => {
+            const btn = revealBtn;
+            btn.disabled = true;
+            btn.textContent = 'Revealing…';
+            try {
+              if (state.puzzleToken) {
+                const r = await fetch('/api/music/random/reveal?token=' + encodeURIComponent(state.puzzleToken));
+                const res = await r.json();
+                if (res.ok && res.rule) {
+                  state.answerRevealed = true;
+                  if (puzzleData) puzzleData.rule = res.rule;
+                  render(puzzleData, state);
+                } else {
+                  state.checkMessage = res.error || 'Could not reveal. Try a new puzzle.';
+                  render(puzzleData, state);
+                }
+              } else {
+                const full = await fetchToday(true);
+                if (full.ok && full.rule) {
+                  state.answerRevealed = true;
+                  render(full, state);
+                } else {
+                  state.checkMessage = full.error || 'Could not load answer.';
+                  render(puzzleData, state);
+                }
+              }
+            } catch (err) {
+              state.checkMessage = 'Reveal failed. Try again.';
+              render(puzzleData, state);
+            }
+          })();
+        }
+      });
+      rootEl.addEventListener('keydown', function handleKey(e) {
+        if (e.key !== 'Enter') return;
+        const input = rootEl.querySelector('.guess-input[data-guess-input]');
+        if (document.activeElement === input && input && !input.disabled) {
+          e.preventDefault();
+          doCheck();
+        }
+      });
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    (async () => {
+      const data = await fetchToday();
+      render(data);
+    })();
+  </script>
+</body>
+</html>

@@ -69,6 +69,16 @@ except Exception:
     _MOVIES_AVAILABLE = False
     movies_get_today = movies_get_random = check_movies_guess = None  # type: ignore
 
+# Music puzzle (optional: curated list, no API)
+try:
+    from music.game import get_today_puzzle as music_get_today
+    from music.game import get_random_puzzle as music_get_random
+    from music.game import check_music_guess
+    _MUSIC_AVAILABLE = True
+except Exception:
+    _MUSIC_AVAILABLE = False
+    music_get_today = music_get_random = check_music_guess = None  # type: ignore
+
 app = FastAPI(title="Patternfall")
 
 # In-memory cache for random puzzles: token -> { rule, metric_a, created_at }
@@ -87,6 +97,9 @@ _COUNTRIES_RANDOM_CACHE: dict[str, dict] = {}
 
 # Movies random puzzle cache: token -> { rule, category_key, created_at }
 _MOVIES_RANDOM_CACHE: dict[str, dict] = {}
+
+# Music random puzzle cache: token -> { rule, category_key, created_at }
+_MUSIC_RANDOM_CACHE: dict[str, dict] = {}
 
 
 def _get_cached_random(token: str | None) -> dict | None:
@@ -650,6 +663,110 @@ def api_movies_check(body: MoviesCheckRequest):
     return out
 
 
+# --- Music category ---
+
+def _get_cached_music_random(token: str | None) -> dict | None:
+    if not token or not token.strip():
+        return None
+    now = time.time()
+    for k in list(_MUSIC_RANDOM_CACHE):
+        if now - _MUSIC_RANDOM_CACHE[k].get("created_at", 0) > _RANDOM_CACHE_TTL_SEC:
+            del _MUSIC_RANDOM_CACHE[k]
+    return _MUSIC_RANDOM_CACHE.get(token.strip())
+
+
+@app.get("/api/music/today")
+def api_music_today(reveal_answer: bool = False):
+    """Return today's music puzzle."""
+    if not _MUSIC_AVAILABLE or music_get_today is None:
+        return {"ok": False, "error": "Music category is not available."}
+    try:
+        data = music_get_today()
+    except Exception as e:
+        return {"ok": False, "error": f"Could not load puzzle: {e}"}
+    if data is None:
+        return {"ok": False, "error": "No music puzzle available."}
+    out: dict[str, Any] = {
+        "ok": True,
+        "date": time.strftime("%Y-%m-%d", time.gmtime()),
+        "words": data["words"],
+        "hints": data["hints"],
+        "difficulty": data.get("difficulty", "medium"),
+    }
+    if reveal_answer:
+        out["rule"] = data["rule"]
+    return out
+
+
+@app.get("/api/music/random")
+def api_music_random(reveal_answer: bool = False):
+    """Return a random music puzzle with a token for checking."""
+    if not _MUSIC_AVAILABLE or music_get_random is None:
+        return {"ok": False, "error": "Music category is not available."}
+    try:
+        data = music_get_random()
+    except Exception as e:
+        return {"ok": False, "error": f"Could not load puzzle: {e}"}
+    if data is None:
+        return {"ok": False, "error": "No music puzzle available."}
+    token = secrets.token_urlsafe(16)
+    _MUSIC_RANDOM_CACHE[token] = {
+        "rule": data["rule"],
+        "category_key": data.get("category_key", ""),
+        "created_at": time.time(),
+    }
+    out: dict[str, Any] = {
+        "ok": True,
+        "date": "Random",
+        "words": data["words"],
+        "hints": data["hints"],
+        "difficulty": data.get("difficulty", "medium"),
+        "token": token,
+    }
+    if reveal_answer:
+        out["rule"] = data["rule"]
+    return out
+
+
+@app.get("/api/music/random/reveal")
+def api_music_random_reveal(token: str = ""):
+    """Reveal the rule for a random music puzzle by token."""
+    cached = _get_cached_music_random(token)
+    if not cached:
+        return {"ok": False, "error": "Invalid or expired puzzle."}
+    return {"ok": True, "rule": cached["rule"]}
+
+
+class MusicCheckRequest(BaseModel):
+    guess: str = ""
+    token: str = ""
+
+
+@app.post("/api/music/check")
+def api_music_check(body: MusicCheckRequest):
+    """Check guess for music puzzle. Use token if this is a random puzzle."""
+    if not _MUSIC_AVAILABLE or check_music_guess is None:
+        return {"ok": False, "error": "Music category is not available."}
+    cached = _get_cached_music_random(body.token)
+    if cached is not None:
+        rule = cached["rule"]
+        category_key = cached.get("category_key", "")
+    else:
+        try:
+            data = music_get_today()
+        except Exception:
+            return {"ok": False, "error": "No puzzle available."}
+        if data is None:
+            return {"ok": False, "error": "No puzzle available."}
+        rule = data["rule"]
+        category_key = data.get("category_key", "")
+    correct, message = check_music_guess(body.guess or "", rule, category_key)
+    out: dict[str, Any] = {"ok": True, "correct": correct, "message": message}
+    if correct:
+        out["rule"] = rule
+    return out
+
+
 class CheckRequest(BaseModel):
     guess: str = ""
     token: str = ""
@@ -740,6 +857,15 @@ def movies():
     if html_path.exists():
         return FileResponse(html_path)
     return HTMLResponse("<p>Movies game not found.</p>")
+
+
+@app.get("/music", response_class=HTMLResponse)
+def music():
+    """Serve the Music daily pattern game."""
+    html_path = STATIC_DIR / "music.html"
+    if html_path.exists():
+        return FileResponse(html_path)
+    return HTMLResponse("<p>Music game not found.</p>")
 
 
 def _serve_countries_html():

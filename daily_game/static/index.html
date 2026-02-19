@@ -146,6 +146,14 @@
       border-color: #dc2626;
       background: rgba(220, 38, 38, 0.1);
     }
+    .category-card.music.available {
+      color: #d97706;
+    }
+    .category-card.music.available .sublabel { color: #d97706; }
+    .category-card.music.available:hover {
+      border-color: #d97706;
+      background: rgba(217, 119, 6, 0.1);
+    }
   </style>
 </head>
 <body>
@@ -173,10 +181,10 @@
         <span class="label">Movies &amp; TV</span>
         <span class="sublabel">Play</span>
       </a>
-      <span class="category-card coming-soon">
+      <a href="/music" class="category-card available music">
         <span class="label">Music</span>
-        <span class="sublabel">Coming soon</span>
-      </span>
+        <span class="sublabel">Play</span>
+      </a>
     </div>
   </div>
 </body>
