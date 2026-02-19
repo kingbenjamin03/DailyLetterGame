@@ -350,6 +350,136 @@
       color: var(--muted);
       margin-bottom: 1.25rem;
     }
+    /* --- Suggest a puzzle button & modal --- */
+    .suggest-fab {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      z-index: 1000;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 0.6rem 1.1rem;
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      transition: color 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+    }
+    .suggest-fab:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.16);
+    }
+    .suggest-modal-wrap {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+    }
+    .suggest-modal-wrap.open { display: block; }
+    .suggest-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+    }
+    .suggest-dialog {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(520px, 92vw);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 2rem;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+      animation: fadeSlideIn 0.25s ease-out;
+    }
+    .suggest-dialog h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .suggest-subtext {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+    }
+    .suggest-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+    }
+    .suggest-field label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    .suggest-field input,
+    .suggest-field textarea {
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 0.65rem 0.9rem;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      resize: vertical;
+      transition: border-color 0.2s ease;
+    }
+    .suggest-field input:focus,
+    .suggest-field textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .suggest-actions {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: flex-end;
+      margin-top: 1.25rem;
+    }
+    .suggest-cancel-btn {
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 0.65rem 1.2rem;
+      background: transparent;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 600;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .suggest-cancel-btn:hover { color: var(--text); border-color: var(--text); }
+    .suggest-submit-btn {
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 0.65rem 1.35rem;
+      background: var(--accent);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      transition: filter 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
+    }
+    .suggest-submit-btn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+    .suggest-submit-btn:disabled { opacity: 0.6; cursor: default; }
+    .suggest-msg {
+      margin-top: 0.85rem;
+      font-size: 0.9rem;
+      min-height: 1.2em;
+    }
+    .suggest-msg.ok { color: var(--accent); font-weight: 600; }
+    .suggest-msg.err { color: var(--danger); }
   </style>
 </head>
 <body>
@@ -369,6 +499,27 @@
     </div>
     <div class="refresh-row" id="refresh-row" style="display: none;">
       <button type="button" class="refresh-btn" id="refresh-game-btn">New puzzle</button>
+    </div>
+  </div>
+  <button class="suggest-fab" onclick="openSuggestModal()">💡 Suggest a puzzle</button>
+  <div id="suggest-modal" class="suggest-modal-wrap" aria-modal="true" role="dialog">
+    <div class="suggest-overlay" onclick="closeSuggestModal()"></div>
+    <div class="suggest-dialog">
+      <h2>Suggest a puzzle</h2>
+      <p class="suggest-subtext">Describe an artist, album, genre, or decade and list 5–8 songs or artists that fit it.</p>
+      <div class="suggest-field">
+        <label>Connection / Answer</label>
+        <input id="suggest-label" type="text" placeholder="e.g. Songs by Kendrick Lamar">
+      </div>
+      <div class="suggest-field">
+        <label>Items (one per line, 5–8)</label>
+        <textarea id="suggest-items" rows="6" placeholder="HUMBLE.&#10;DNA.&#10;All the Stars&#10;LOYALTY.&#10;Swimming Pools"></textarea>
+      </div>
+      <div class="suggest-actions">
+        <button class="suggest-cancel-btn" onclick="closeSuggestModal()">Cancel</button>
+        <button class="suggest-submit-btn" id="suggest-submit-btn" onclick="submitSuggestion()">Submit</button>
+      </div>
+      <div id="suggest-msg" class="suggest-msg"></div>
     </div>
   </div>
   <script>
@@ -697,6 +848,61 @@
         render(data);
       }
     })();
+    // --- Suggest a puzzle ---
+    const SUGGEST_CATEGORY = 'music';
+    function openSuggestModal() {
+      const m = document.getElementById('suggest-modal');
+      if (m) { m.classList.add('open'); document.getElementById('suggest-label').focus(); }
+    }
+    function closeSuggestModal() {
+      const m = document.getElementById('suggest-modal');
+      if (m) {
+        m.classList.remove('open');
+        document.getElementById('suggest-label').value = '';
+        document.getElementById('suggest-items').value = '';
+        const msg = document.getElementById('suggest-msg');
+        if (msg) { msg.textContent = ''; msg.className = 'suggest-msg'; }
+        const btn = document.getElementById('suggest-submit-btn');
+        if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
+      }
+    }
+    async function submitSuggestion() {
+      const label = (document.getElementById('suggest-label').value || '').trim();
+      const rawItems = document.getElementById('suggest-items').value || '';
+      const items = rawItems.split('\n').map(s => s.trim()).filter(Boolean);
+      const msgEl = document.getElementById('suggest-msg');
+      const btn = document.getElementById('suggest-submit-btn');
+      if (!label) {
+        if (msgEl) { msgEl.textContent = 'Please enter a connection / answer.'; msgEl.className = 'suggest-msg err'; }
+        return;
+      }
+      if (items.length < 4) {
+        if (msgEl) { msgEl.textContent = 'Please list at least 4 items (one per line).'; msgEl.className = 'suggest-msg err'; }
+        return;
+      }
+      if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+      if (msgEl) { msgEl.textContent = ''; msgEl.className = 'suggest-msg'; }
+      try {
+        const res = await fetch('/api/suggest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category: SUGGEST_CATEGORY, label, items }),
+        }).then(r => r.json());
+        if (msgEl) {
+          msgEl.textContent = res.message || (res.ok ? 'Thank you!' : 'Something went wrong.');
+          msgEl.className = 'suggest-msg ' + (res.ok ? 'ok' : 'err');
+        }
+        if (res.ok) setTimeout(closeSuggestModal, 2200);
+        else if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
+      } catch (_) {
+        if (msgEl) { msgEl.textContent = 'Network error. Please try again.'; msgEl.className = 'suggest-msg err'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
+      }
+    }
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeSuggestModal();
+    });
+
   </script>
 </body>
 </html>

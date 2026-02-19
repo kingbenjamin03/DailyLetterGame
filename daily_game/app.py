@@ -277,6 +277,7 @@ def api_sports_random(reveal_answer: bool = False):
         "league_id": data.get("league_id", ""),
         "stat_name": data.get("stat_name", ""),
         "season_year": data.get("season_year"),
+        "_accepted": data.get("_accepted"),
         "created_at": time.time(),
     }
     out = {
@@ -326,11 +327,13 @@ def api_sports_check(body: SportsCheckRequest):
     if not _SPORTS_AVAILABLE or check_sports_guess is None:
         return {"ok": False, "error": "Sports category is not available."}
     cached = _get_cached_sports_random(body.token)
+    accepted_override = None
     if cached is not None:
         rule = cached["rule"]
         league_id = cached.get("league_id", "")
         stat_name = cached.get("stat_name", "")
         season_year = cached.get("season_year")
+        accepted_override = cached.get("_accepted")
     else:
         try:
             data = sports_get_today()
@@ -342,7 +345,8 @@ def api_sports_check(body: SportsCheckRequest):
         league_id = data.get("league_id", "")
         stat_name = data.get("stat_name", "")
         season_year = data.get("season_year")
-    correct, message = check_sports_guess(body.guess or "", rule, league_id, stat_name, season_year)
+        accepted_override = data.get("_accepted")
+    correct, message = check_sports_guess(body.guess or "", rule, league_id, stat_name, season_year, accepted_override)
     out = {"ok": True, "correct": correct, "message": message}
     if correct:
         out["rule"] = rule
@@ -809,6 +813,212 @@ def api_check(body: CheckRequest):
     if correct:
         out["rule"] = data["rule"]
     return out
+
+
+# ---------------------------------------------------------------------------
+# User suggestion system
+# ---------------------------------------------------------------------------
+
+_SUGGESTIONS_PATH = Path(__file__).resolve().parent.parent / "data" / "suggestions.json"
+_SUGGEST_ALLOWED = {"sports", "trivia", "countries", "movies", "music"}
+
+
+def _load_suggestions_file() -> list:
+    """Load the suggestions JSON array, returning [] on any error."""
+    try:
+        if _SUGGESTIONS_PATH.exists():
+            with open(_SUGGESTIONS_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+    except Exception:
+        pass
+    return []
+
+
+def _save_suggestions_file(entries: list) -> None:
+    """Atomically write the suggestions list back to disk."""
+    try:
+        _SUGGESTIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _SUGGESTIONS_PATH.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(entries, f, indent=2, ensure_ascii=False)
+        tmp.replace(_SUGGESTIONS_PATH)
+    except Exception:
+        pass
+
+
+def _derive_accepted(label: str, category: str) -> list[str]:
+    """Auto-derive accepted guess phrases from the user's label string."""
+    import re as _re
+    label_low = label.strip().lower()
+    # Strip common lead-ins so we keep the key noun
+    stop_prefixes = [
+        "songs by ", "albums by ", "tracks by ", "music by ",
+        "movies starring ", "films starring ", "movies directed by ",
+        "films directed by ", "movies by ", "films by ",
+        "songs from ", "tracks from ", "songs off ",
+        "athletes with ", "players with ", "countries that ", "countries with ",
+        "countries in ", "things that ", "things with ", "things from ",
+        "members of ", "artists of ", "artists from ", "items from ",
+    ]
+    core = label_low
+    for prefix in stop_prefixes:
+        if core.startswith(prefix):
+            core = core[len(prefix):]
+            break
+    # Remove trailing parentheticals like "(2010s)"
+    core = _re.sub(r"\s*\(.*?\)\s*$", "", core).strip()
+    accepted: list[str] = []
+    for phrase in (label_low, core):
+        phrase = phrase.strip()
+        if phrase and phrase not in accepted:
+            accepted.append(phrase)
+    # Also add first-word shorthand for single-word artist/country names
+    words = core.split()
+    if len(words) == 1 and words[0] not in accepted:
+        accepted.append(words[0])
+    return accepted
+
+
+def _auto_hints(category: str, label: str) -> list[str]:
+    """Return 3 generic progressive hints for a user-submitted puzzle."""
+    label_low = label.lower()
+    if category == "music":
+        if "album" in label_low:
+            return [
+                "These songs all appear on the same album.",
+                "They're tracks from one iconic record.",
+                "Guess the album or the artist.",
+            ]
+        return [
+            "These songs or artists share a connection.",
+            "They're all linked to the same musician, band, or genre.",
+            "Guess the artist, band, or connection.",
+        ]
+    if category == "movies":
+        return [
+            "These titles share a key connection.",
+            "Think about who directed or starred in all of them.",
+            "Guess the person, franchise, or theme.",
+        ]
+    if category == "sports":
+        return [
+            "These athletes share a statistical achievement.",
+            "Look at the numbers — what connects them?",
+            "Guess the stat or leaderboard.",
+        ]
+    if category == "trivia":
+        return [
+            "These things have something in common.",
+            "Think about what category links them all.",
+            "Guess the connection.",
+        ]
+    if category == "countries":
+        return [
+            "These countries share a geographic or cultural trait.",
+            "Think about the region or defining characteristic.",
+            "Guess the connection.",
+        ]
+    return [
+        "These items share a connection.",
+        "Think about what they all have in common.",
+        "Guess the connection.",
+    ]
+
+
+def _ai_validate_suggestion(category: str, label: str, items: list[str]) -> tuple[bool, str]:
+    """
+    Use OpenAI to verify the submission is (a) factually accurate and (b) appropriate.
+    Returns (valid, reason). Falls back to accepting all when no API key is set.
+    """
+    import os as _os
+    api_key = _os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        # No AI available — accept optimistically (good for local dev)
+        return True, ""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        items_str = ", ".join(f'"{it}"' for it in items[:10])
+        prompt = (
+            f'You are validating a user-submitted puzzle for a trivia game called Patternfall.\n'
+            f'Category: {category}\n'
+            f'Claimed connection: "{label}"\n'
+            f'Items shown to players: [{items_str}]\n\n'
+            f'Check TWO things:\n'
+            f'1. Are ALL the items real, genuine examples of "{label}"? (factual accuracy)\n'
+            f'2. Is the content appropriate for a general audience? (no offensive/adult content)\n\n'
+            f'Reply with JSON only, no extra text: {{"valid": true or false, "reason": "one short sentence"}}'
+        )
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=80,
+            temperature=0,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        # Strip markdown fences if present
+        raw = raw.strip("`").strip()
+        if raw.startswith("json"):
+            raw = raw[4:].strip()
+        result = json.loads(raw)
+        valid = bool(result.get("valid", False))
+        reason = str(result.get("reason", ""))
+        return valid, reason
+    except Exception as e:
+        # If AI call fails, be permissive (don't block users due to API errors)
+        return True, f"(AI unavailable: {e})"
+
+
+class SuggestRequest(BaseModel):
+    category: str = ""
+    label: str = ""
+    items: list[str] = []
+
+
+@app.post("/api/suggest")
+async def api_suggest(body: SuggestRequest):
+    """Receive a user-submitted puzzle suggestion, validate with AI, and store if valid."""
+    import uuid as _uuid
+    from datetime import datetime as _dt, timezone as _tz
+
+    category = (body.category or "").strip().lower()
+    label = (body.label or "").strip()
+    items = [it.strip() for it in (body.items or []) if it.strip()]
+
+    if category not in _SUGGEST_ALLOWED:
+        return {"ok": False, "message": f"Suggestions not supported for '{category}'."}
+    if not label:
+        return {"ok": False, "message": "Please provide a connection / answer label."}
+    if len(items) < 4:
+        return {"ok": False, "message": "Please provide at least 4 items."}
+    if len(items) > 10:
+        items = items[:10]
+
+    valid, reason = _ai_validate_suggestion(category, label, items)
+    if not valid:
+        msg = "We couldn't verify that puzzle."
+        if reason:
+            msg += f" {reason}"
+        return {"ok": False, "message": msg}
+
+    entry = {
+        "id": str(_uuid.uuid4()),
+        "category": category,
+        "label": label,
+        "accepted": _derive_accepted(label, category),
+        "difficulty": "medium",
+        "hints": _auto_hints(category, label),
+        "puzzle_type": "user",
+        "items": items,
+        "submitted_at": _dt.now(_tz.utc).isoformat(),
+        "status": "approved",
+    }
+    existing = _load_suggestions_file()
+    existing.append(entry)
+    _save_suggestions_file(existing)
+
+    return {"ok": True, "message": "Thanks! Your puzzle suggestion will enter the rotation soon."}
 
 
 STATIC_DIR = Path(__file__).parent / "static"

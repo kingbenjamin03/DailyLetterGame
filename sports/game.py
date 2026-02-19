@@ -4,8 +4,10 @@ user guesses what stat they all lead in. Uses hardcoded data (no DB required).
 """
 from __future__ import annotations
 
+import json
 import random
 from datetime import datetime, timezone
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Hardcoded all-time career leaderboard data
@@ -161,24 +163,81 @@ def _build_puzzle(league_id: str, stat_name: str) -> dict | None:
     }
 
 
+def _load_approved_suggestions() -> list[dict]:
+    """Load approved user-submitted sports puzzles from data/suggestions.json."""
+    path = Path(__file__).resolve().parent.parent / "data" / "suggestions.json"
+    if not path.exists():
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            all_sug = json.load(f)
+        result = []
+        for s in all_sug:
+            if s.get("category") == "sports" and s.get("status") == "approved":
+                items = s.get("items", [])
+                if len(items) < 4:
+                    continue
+                result.append({
+                    "label": s.get("label", ""),
+                    "accepted": s.get("accepted", [s.get("label", "").lower()]),
+                    "difficulty": s.get("difficulty", "medium"),
+                    "hints": s.get("hints", ["These athletes share a statistical achievement.", "Look at the numbers — what connects them?", "Guess the stat or leaderboard."]),
+                    "items": items,
+                    "id": s.get("id", "user"),
+                })
+        return result
+    except Exception:
+        return []
+
+
 def get_today_puzzle() -> dict | None:
     """Deterministic puzzle for today: seed by date, pick one leaderboard."""
-    available = list(LEADERBOARDS.keys())
-    if not available:
+    suggestions = _load_approved_suggestions()
+    built_in_keys = list(LEADERBOARDS.keys())
+    pool_size = len(built_in_keys) + len(suggestions)
+    if pool_size == 0:
         return None
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     rng = random.Random(today)
-    league_id, stat_name = rng.choice(available)
-    return _build_puzzle(league_id, stat_name)
+    idx = rng.randrange(pool_size)
+    if idx < len(built_in_keys):
+        league_id, stat_name = built_in_keys[idx]
+        return _build_puzzle(league_id, stat_name)
+    sug = suggestions[idx - len(built_in_keys)]
+    players = sug["items"][:DEFAULT_NUM_PLAYERS]
+    return {
+        "words": players,
+        "rule": sug["label"],
+        "hints": sug["hints"],
+        "difficulty": sug["difficulty"],
+        "league_id": "",
+        "stat_name": "",
+        "_accepted": sug["accepted"],
+    }
 
 
 def get_random_puzzle() -> dict | None:
     """Random puzzle (different leaderboard each time)."""
-    available = list(LEADERBOARDS.keys())
-    if not available:
+    suggestions = _load_approved_suggestions()
+    built_in_keys = list(LEADERBOARDS.keys())
+    pool_size = len(built_in_keys) + len(suggestions)
+    if pool_size == 0:
         return None
-    league_id, stat_name = random.choice(available)
-    return _build_puzzle(league_id, stat_name)
+    idx = random.randrange(pool_size)
+    if idx < len(built_in_keys):
+        league_id, stat_name = built_in_keys[idx]
+        return _build_puzzle(league_id, stat_name)
+    sug = suggestions[idx - len(built_in_keys)]
+    players = sug["items"][:DEFAULT_NUM_PLAYERS]
+    return {
+        "words": players,
+        "rule": sug["label"],
+        "hints": sug["hints"],
+        "difficulty": sug["difficulty"],
+        "league_id": "",
+        "stat_name": "",
+        "_accepted": sug["accepted"],
+    }
 
 
 # Wikipedia search URL for player info (no DB needed)
@@ -200,7 +259,8 @@ def get_player_info(name: str, league_id: str = "") -> dict | None:
 
 
 def check_sports_guess(
-    guess: str, rule: str, league_id: str = "", stat_name: str = "", season_year: int | None = None
+    guess: str, rule: str, league_id: str = "", stat_name: str = "", season_year: int | None = None,
+    accepted_override: list[str] | None = None,
 ) -> tuple[bool, str]:
     """
     Check user guess against the puzzle rule. Uses keyword/phrase matching.
@@ -209,7 +269,8 @@ def check_sports_guess(
     g = (guess or "").strip().lower()
     if not g:
         return False, "Type your guess first."
-    _, accepted = SPORT_RULES.get((league_id, stat_name), ("", []))
+    _, built_in_accepted = SPORT_RULES.get((league_id, stat_name), ("", []))
+    accepted = list(accepted_override or []) + list(built_in_accepted)
     # Normalize: collapse spaces
     normalized = " ".join(g.split())
     for phrase in accepted:

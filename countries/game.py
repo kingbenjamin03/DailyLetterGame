@@ -10,6 +10,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 
@@ -254,33 +255,78 @@ def _get_matching_countries(cat: CountryCategory) -> list[dict]:
     return matches
 
 
-def _pick_puzzle(rng: random.Random) -> dict | None:
-    """Pick a category, fetch matching countries, select items."""
-    cats = list(CATEGORIES)
-    rng.shuffle(cats)
+def _load_approved_suggestions() -> list[dict]:
+    """Load approved user-submitted countries puzzles (with pre-specified country names)."""
+    path = Path(__file__).resolve().parent.parent / "data" / "suggestions.json"
+    if not path.exists():
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            all_sug = json.load(f)
+        result = []
+        for s in all_sug:
+            if s.get("category") == "countries" and s.get("status") == "approved":
+                items = s.get("items", [])
+                if len(items) < MIN_ITEMS:
+                    continue
+                result.append({
+                    "label": s.get("label", ""),
+                    "accepted": s.get("accepted", [s.get("label", "").lower()]),
+                    "difficulty": s.get("difficulty", "medium"),
+                    "hints": s.get("hints", ["These countries share a geographic or cultural trait.", "Think about the region or characteristic.", "Guess the connection."]),
+                    "items": items,
+                    "id": s.get("id", "user"),
+                })
+        return result
+    except Exception:
+        return []
 
-    for cat in cats:
-        matches = _get_matching_countries(cat)
-        if len(matches) < MIN_ITEMS:
-            continue
-        n = min(DEFAULT_NUM_ITEMS, len(matches))
-        selected = rng.sample(matches, n)
-        words = []
-        flags = {}
-        for c in selected:
-            name = (c.get("name") or {}).get("common", "")
-            words.append(name)
-            flag = c.get("flag", "")
-            if flag:
-                flags[name] = flag
-        return {
-            "words": words,
-            "flags": flags,
-            "rule": cat.label,
-            "hints": cat.hints,
-            "difficulty": cat.difficulty,
-            "category_key": cat.key,
-        }
+
+def _pick_puzzle(rng: random.Random) -> dict | None:
+    """Pick a category, fetch matching countries, select items. Also draws from user suggestions."""
+    # Build a mixed pool
+    pool: list[tuple[str, object]] = [("cat", c) for c in CATEGORIES]
+    for sug in _load_approved_suggestions():
+        pool.append(("user", sug))
+    rng.shuffle(pool)
+
+    for kind, entry in pool:
+        if kind == "cat":
+            cat = entry  # type: ignore[assignment]
+            matches = _get_matching_countries(cat)
+            if len(matches) < MIN_ITEMS:
+                continue
+            n = min(DEFAULT_NUM_ITEMS, len(matches))
+            selected = rng.sample(matches, n)
+            words = []
+            flags = {}
+            for c in selected:
+                name = (c.get("name") or {}).get("common", "")
+                words.append(name)
+                flag = c.get("flag", "")
+                if flag:
+                    flags[name] = flag
+            return {
+                "words": words,
+                "flags": flags,
+                "rule": cat.label,
+                "hints": cat.hints,
+                "difficulty": cat.difficulty,
+                "category_key": cat.key,
+            }
+        else:
+            sug = entry  # type: ignore[assignment]
+            items = sug["items"]
+            n = min(DEFAULT_NUM_ITEMS, len(items))
+            words = rng.sample(items, n)
+            return {
+                "words": words,
+                "flags": {},  # no flags for user-submitted country puzzles
+                "rule": sug["label"],
+                "hints": sug["hints"],
+                "difficulty": sug["difficulty"],
+                "category_key": sug["id"],
+            }
     return None
 
 
@@ -325,5 +371,15 @@ def check_countries_guess(guess: str, rule: str, category_key: str = "") -> tupl
             pl = phrase.lower()
             if pl in normalized or normalized in pl:
                 return True, "Correct!"
+
+    # Check user suggestions
+    if cat is None:
+        for sug in _load_approved_suggestions():
+            if sug["id"] == category_key or sug["label"] == rule:
+                for phrase in sug["accepted"]:
+                    pl = phrase.lower()
+                    if pl in normalized or normalized in pl:
+                        return True, "Correct!"
+                break
 
     return False, "Not quite. Think about what these countries have in common."

@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
@@ -266,6 +267,33 @@ def _fetch_category_members(wiki_category: str, limit: int = 100, exclude: list[
     return titles
 
 
+def _load_approved_suggestions() -> list[dict]:
+    """Load approved user-submitted trivia puzzles (with pre-specified items)."""
+    path = Path(__file__).resolve().parent.parent / "data" / "suggestions.json"
+    if not path.exists():
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            all_sug = json.load(f)
+        result = []
+        for s in all_sug:
+            if s.get("category") == "trivia" and s.get("status") == "approved":
+                items = s.get("items", [])
+                if len(items) < MIN_ITEMS:
+                    continue
+                result.append({
+                    "label": s.get("label", ""),
+                    "accepted": s.get("accepted", [s.get("label", "").lower()]),
+                    "difficulty": s.get("difficulty", "medium"),
+                    "hints": s.get("hints", ["These things have something in common.", "Think about what category links them.", "Guess the connection."]),
+                    "items": items,
+                    "id": s.get("id", "user"),
+                })
+        return result
+    except Exception:
+        return []
+
+
 def get_today_puzzle() -> dict | None:
     """Deterministic puzzle for today based on date seed."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -279,23 +307,40 @@ def get_random_puzzle() -> dict | None:
 
 
 def _pick_puzzle(rng: random.Random) -> dict | None:
-    """Pick a category, fetch members, select items."""
-    cats = list(CATEGORIES)
-    rng.shuffle(cats)
+    """Pick a category, fetch members, select items. Also draws from user suggestions."""
+    # Build a pool of (type, entry) — either TriviaCategory or a user suggestion dict
+    pool: list[tuple[str, object]] = [("wiki", c) for c in CATEGORIES]
+    for sug in _load_approved_suggestions():
+        pool.append(("user", sug))
+    rng.shuffle(pool)
 
-    for cat in cats:
-        members = _fetch_category_members(cat.wiki_category, exclude=cat.exclude)
-        if len(members) < MIN_ITEMS:
-            continue
-        n = min(DEFAULT_NUM_ITEMS, len(members))
-        words = rng.sample(members, n)
-        return {
-            "words": words,
-            "rule": cat.label,
-            "hints": cat.hints,
-            "difficulty": cat.difficulty,
-            "category_key": cat.wiki_category,
-        }
+    for kind, entry in pool:
+        if kind == "wiki":
+            cat = entry  # type: ignore[assignment]
+            members = _fetch_category_members(cat.wiki_category, exclude=cat.exclude)
+            if len(members) < MIN_ITEMS:
+                continue
+            n = min(DEFAULT_NUM_ITEMS, len(members))
+            words = rng.sample(members, n)
+            return {
+                "words": words,
+                "rule": cat.label,
+                "hints": cat.hints,
+                "difficulty": cat.difficulty,
+                "category_key": cat.wiki_category,
+            }
+        else:
+            sug = entry  # type: ignore[assignment]
+            items = sug["items"]
+            n = min(DEFAULT_NUM_ITEMS, len(items))
+            words = rng.sample(items, n)
+            return {
+                "words": words,
+                "rule": sug["label"],
+                "hints": sug["hints"],
+                "difficulty": sug["difficulty"],
+                "category_key": sug["id"],
+            }
     return None
 
 
@@ -312,7 +357,7 @@ def check_trivia_guess(guess: str, rule: str, category_key: str = "") -> tuple[b
     if rule_lower in normalized or normalized in rule_lower:
         return True, "Correct!"
 
-    # Check accepted phrases
+    # Check accepted phrases (built-in categories)
     cat = None
     for c in CATEGORIES:
         if c.wiki_category == category_key or c.label == rule:
@@ -324,6 +369,16 @@ def check_trivia_guess(guess: str, rule: str, category_key: str = "") -> tuple[b
             pl = phrase.lower()
             if pl in normalized or normalized in pl:
                 return True, "Correct!"
+
+    # Check user suggestions by label/id
+    if cat is None:
+        for sug in _load_approved_suggestions():
+            if sug["id"] == category_key or sug["label"] == rule:
+                for phrase in sug["accepted"]:
+                    pl = phrase.lower()
+                    if pl in normalized or normalized in pl:
+                        return True, "Correct!"
+                break
 
     # Partial feedback
     return False, "Not quite. Think about what category all of these belong to."

@@ -8,9 +8,11 @@ Mirrors the structure of movies/game.py.
 
 from __future__ import annotations
 
+import json
 import random
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 
 
 @dataclass
@@ -401,6 +403,34 @@ CATEGORIES: list[MusicCategory] = [
 ]
 
 
+def _load_approved_suggestions() -> list[MusicCategory]:
+    """Load approved user-submitted puzzles from data/suggestions.json."""
+    path = Path(__file__).resolve().parent.parent / "data" / "suggestions.json"
+    if not path.exists():
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            all_sug = json.load(f)
+        result = []
+        for s in all_sug:
+            if s.get("category") == "music" and s.get("status") == "approved":
+                items = s.get("items", [])
+                if len(items) < MIN_ITEMS:
+                    continue
+                result.append(MusicCategory(
+                    key=s.get("id", "user_suggestion"),
+                    label=s.get("label", ""),
+                    accepted=s.get("accepted", [s.get("label", "").lower()]),
+                    difficulty=s.get("difficulty", "medium"),
+                    hints=s.get("hints", ["These items share a connection.", "Think about what links them.", "Guess the connection."]),
+                    puzzle_type=s.get("puzzle_type", "user"),
+                    items=items,
+                ))
+        return result
+    except Exception:
+        return []
+
+
 def get_today_puzzle() -> dict | None:
     """Deterministic puzzle for today based on date seed."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -415,7 +445,7 @@ def get_random_puzzle() -> dict | None:
 
 def _pick_puzzle(rng: random.Random) -> dict | None:
     """Pick a category and sample clue items."""
-    cats = list(CATEGORIES)
+    cats = list(CATEGORIES) + _load_approved_suggestions()
     rng.shuffle(cats)
     for cat in cats:
         if len(cat.items) < MIN_ITEMS:
