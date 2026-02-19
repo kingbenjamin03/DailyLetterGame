@@ -130,6 +130,22 @@
       border-color: #9333ea;
       background: rgba(147, 51, 234, 0.1);
     }
+    .category-card.countries.available {
+      color: #0d9488;
+    }
+    .category-card.countries.available .sublabel { color: #0d9488; }
+    .category-card.countries.available:hover {
+      border-color: #0d9488;
+      background: rgba(13, 148, 136, 0.1);
+    }
+    .category-card.movies.available {
+      color: #dc2626;
+    }
+    .category-card.movies.available .sublabel { color: #dc2626; }
+    .category-card.movies.available:hover {
+      border-color: #dc2626;
+      background: rgba(220, 38, 38, 0.1);
+    }
   </style>
 </head>
 <body>
@@ -149,10 +165,14 @@
         <span class="label">Trivia</span>
         <span class="sublabel">Play</span>
       </a>
-      <span class="category-card coming-soon">
+      <a href="/countries" class="category-card available countries">
         <span class="label">Countries</span>
-        <span class="sublabel">Coming soon</span>
-      </span>
+        <span class="sublabel">Play</span>
+      </a>
+      <a href="/movies" class="category-card available movies">
+        <span class="label">Movies &amp; TV</span>
+        <span class="sublabel">Play</span>
+      </a>
       <span class="category-card coming-soon">
         <span class="label">Music</span>
         <span class="sublabel">Coming soon</span>
